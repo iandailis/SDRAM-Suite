@@ -1,5 +1,7 @@
 #! /usr/bin/env python3
 
+# TAKEN FROM https://github.com/tomverbeure/intel_jtag_uart
+
 import sys, platform
 import ctypes, ctypes.util
 import os.path
