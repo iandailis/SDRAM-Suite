@@ -1,0 +1,4 @@
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "sdram_image.sv"]
+set_global_assignment -name SYSTEMVERILOG_FILE [file join $::quartus(qip_path) "VGA_Controller.sv"]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) "ram.v"]
+set_global_assignment -name VERILOG_FILE [file join $::quartus(qip_path) "PLL_VGA_CLK.v"]
