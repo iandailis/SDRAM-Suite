@@ -3,7 +3,6 @@
 module dma_controller (
 	input logic Clk, Reset,
 	input logic Direction, /* 0 is JTAG --> SDRAM, 1 is SDRAM --> JTAG */
-	input logic Act, /* begin and continue an action in the specificed direction */
 
 	/* SDRAM Signals */
 	input logic [15:0] sdram_Dout,
@@ -22,10 +21,11 @@ module dma_controller (
 logic [25:0] dma_addr;
 logic inc_addr;
 
-logic stable_jtag_A;
-logic [15:0] count;
-
 logic [7:0] lower;
+logic start;
+logic ready;
+
+logic last_direction;
 
 enum logic [1:0] {
 	DMA_BURST,
@@ -34,60 +34,43 @@ enum logic [1:0] {
 
 always_ff @ (posedge Clk) begin
 
+	last_direction <= Direction;
+	if (Direction != last_direction) begin
+		dma_addr <= '0;
+		start <= 1'b0;
+	end
+
 	/* saving the bottom 8 bits for the next cycle 
 	   which will write the top 8 bits */
 	if (dma_addr[0] == 0) begin
 		lower <= jtag_Dout;
 	end
 
-	/* make sure the A signal is actually stable before using
-	   as the signals are not always correct */
-	if (stable_jtag_A != jtag_A) begin
-		count <= count + 16'h1;
-		if (count == 16'hFFFF) begin
-			stable_jtag_A <= jtag_A;
-		end
-	end else begin
-		count <= 0;
+	if (ready) begin
+		start <= 1'b1;
 	end
 
-	case (curr_state)
-		DMA_BURST: begin
-			/* increment the address 1 clock cycle after a jtag action */
-			if (jtag_Act) begin
-				inc_addr <= 1'b1;
-			end else if (inc_addr) begin
-				dma_addr <= dma_addr + 26'd1;
-				inc_addr <= 1'b0;
-			end
-			/* return to Check when the action signal is lowered */
-			if (!Act) begin
-				curr_state <= Check;
-			end
-		end
-		Check : begin
-			dma_addr <= 26'h0;
-			/* upon an action, begin bursting */
-			if (Act && sdram_R) begin
-				curr_state <= DMA_BURST;
-			end
-		end
-		default : begin
-			curr_state <= Check;
-		end
-	endcase
+	inc_addr <= jtag_Act & start;
+	if (inc_addr) begin
+		dma_addr <= dma_addr + 26'd1;
+		inc_addr <= 1'b0;
+	end
+
 end
 
 always_comb begin
+	ready = jtag_A & jtag_R & sdram_R;
+
 	jtag_Clk = Clk;
 	jtag_Reset = Reset;
-	jtag_Act = 1'b0;
-	jtag_WE = 1'b0;
+	jtag_Act = ready && (~Direction || (Direction && start));
+	jtag_WE = Direction;
 
 	sdram_Clk = Clk;
 	sdram_Reset = Reset;
-	sdram_Addr = 25'h0;
-	sdram_WE = 1'b0;
+	sdram_Addr = dma_addr[25:1];
+	sdram_WE = ~Direction & (start || jtag_A);
+	sdram_Focus = 1'b0;
 
 	/* write the lower vs the upper 8 bits during a burst */
 	case (dma_addr[0])
@@ -98,27 +81,6 @@ always_comb begin
 		1'b1 : begin
 			sdram_Din = {jtag_Dout, lower};
 			jtag_Din = sdram_Dout[15:8];
-		end
-	endcase
-
-	sdram_Focus = 1'b0;
-	case (curr_state)
-		DMA_BURST : begin
-			/* the burst logic is bidirectional, the Direction signal 
-			   differentiates a read vs a write burst */
-			jtag_WE = Direction;
-			sdram_WE = ~Direction;
-
-			sdram_Addr = dma_addr[25:1];
-			if (jtag_A & jtag_R & sdram_R) begin
-				jtag_Act = 1'b1;
-			end
-		end
-		Check : begin
-			/* when the SDRAM is ready and action is asserted, begin the burst */
-			if (Act && stable_jtag_A && sdram_R) begin
-				jtag_Act = 1'b1;
-			end
 		end
 	endcase
 end

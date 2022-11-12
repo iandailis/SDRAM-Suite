@@ -52,8 +52,8 @@ def checksum(ju):
     readarray = []
     writearray = []
     for i in range(0, 16 * 16 * 2**10):
-        # num = i % 256
-        num = random.randint(0, 256)
+        num = i % 256
+        # num = random.randint(0, 255)
         writearray.append(num)
     writeAndCheck(ju, writearray)
 

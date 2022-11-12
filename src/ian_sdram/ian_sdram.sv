@@ -7,7 +7,6 @@ module ian_sdram (
 	output logic [15:0] Dout,
 	input logic WE, /* Write Enable for SDRAM */
 
-	
 	input logic Focus, /* Stops SDRAM refresh cycles while asserted.
 	                      Useful for time-sensitive bursts. May
 	                      corrupt SDRAM if asserted for too long. */ 
@@ -47,6 +46,22 @@ logic [7:0] jtag_Din, jtag_Dout;
 logic jtag_Clk, jtag_Reset;
 logic jtag_Act, jtag_WE, jtag_R, jtag_A;
 
+logic jtag_A_delayed;
+logic [23:0] count;
+always_ff @ (posedge Clk) begin
+	jtag_A_delayed <= jtag_A || count;
+	case (jtag_A)
+		1'b0 : begin
+			if (count) begin
+				count <= count + 'h1;
+			end
+		end
+		1'b1 : begin
+			count <= 'h1;
+		end
+	endcase
+end
+
 always_comb begin
 	sdram_Clk = dma_sdram_Clk;
 	sdram_Reset = dma_sdram_Reset;
@@ -56,7 +71,8 @@ always_comb begin
 
 	dma_sdram_Dout = sdram_Dout;
 	dma_sdram_R = sdram_R;
-	case (Act)
+
+	case (jtag_A || jtag_A_delayed)
 		/* when no JTAG action, user can access SDRAM */
 		1'b0 : begin
 			sdram_Din = Din;
@@ -78,7 +94,6 @@ dma_controller dma (
 	.Clk(Clk),
 	.Reset(Reset),
 	.Direction(Direction),
-	.Act(Act),
 
 	.sdram_Dout(dma_sdram_Dout),
 	.sdram_Din(dma_sdram_Din),

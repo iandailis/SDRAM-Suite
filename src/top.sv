@@ -75,7 +75,7 @@ always_comb begin
 end
 
 always_comb begin
-	hex_in = {ian_Addr[15:0], ian_Dout[7:0]};
+	hex_in = {2'h0, DRAM_ADDR, ian_Dout[7:0]};
 	LEDR[9] = ian_R;
 	LEDR[8] = ian_Focus;
 	LEDR[7:0] = sw_sync[7:0];
